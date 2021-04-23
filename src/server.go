@@ -2,9 +2,13 @@ package lugo
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
+	"os"
+	"os/signal"
 	"sync"
 	"sync/atomic"
+	"syscall"
 
 	"github.com/xingshuo/lugo/common/log"
 )
@@ -84,6 +88,71 @@ func (s *Server) loadConfig(config string) error {
 func (s *Server) NewService(svcName string) (*Service, error) {
 	s.rwMu.Lock()
 	defer s.rwMu.Unlock()
+	svc := s.nameServices[svcName]
+	if svc != nil {
+		return nil, fmt.Errorf("service re-create")
+	}
 	handle := s.NewSvcHandle()
+	if handle == 0 {
+		return nil, fmt.Errorf("invalid svc handle")
+	}
+	svc = &Service{
+		server: s,
+		name:   svcName,
+		handle: handle,
+	}
+	svc.Init()
+	s.handleServices[handle] = svc
+	s.nameServices[svcName] = svc
+	go svc.Serve()
+	return svc, nil
+}
 
+func (s *Server) DelService(svcName string) {
+	s.rwMu.Lock()
+	svc := s.nameServices[svcName]
+	delete(s.nameServices, svcName)
+	if svc != nil {
+		delete(s.handleServices, svc.handle)
+	}
+	s.rwMu.Unlock()
+	if svc != nil {
+		svc.Exit()
+	}
+}
+
+func (s *Server) GetService(svcName string) *Service {
+	s.rwMu.RLock()
+	defer s.rwMu.RUnlock()
+	return s.nameServices[svcName]
+}
+
+func (s *Server) GetServiceByHandle(handle SVC_HANDLE) *Service {
+	s.rwMu.RLock()
+	defer s.rwMu.RUnlock()
+	return s.handleServices[handle]
+}
+
+//接收指定信号，优雅退出接口
+func (s *Server) WaitExit(sigs ...os.Signal) {
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, sigs...)
+	sig := <-c
+	s.log.Infof("Server(%v) exitNotify with signal(%d)\n", syscall.Getpid(), sig)
+	s.Exit()
+}
+
+func (s *Server) Exit() {
+	s.sidecar.Exit()
+	s.rwMu.RLock()
+	services := make([]string, 0, len(s.nameServices))
+	for name := range s.nameServices {
+		services = append(services, name)
+	}
+	s.rwMu.RUnlock()
+	// 顺序退出
+	for _, name := range services {
+		s.DelService(name)
+	}
+	s.log.Info("server exit!")
 }
