@@ -5,7 +5,8 @@ import "context"
 type SVC_HANDLE uint64
 
 const (
-	DEFAULT_MQ_SIZE = 1024
+	DEFAULT_MQ_SIZE  = 1024
+	PACK_BUFFER_SIZE = 32767
 )
 
 const (
@@ -14,7 +15,7 @@ const (
 	CtxKeyRpcTimeout = "LugoRpcTimeout" // 单位: 10ms
 )
 
-type DispatchFunc func(ctx context.Context, args ...interface{}) []interface{}
+type DispatchFunc func(ctx context.Context, args ...interface{}) ([]interface{}, error)
 type TimerFunc func()
 type Timer struct {
 	onTick   TimerFunc

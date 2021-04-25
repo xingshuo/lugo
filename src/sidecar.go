@@ -1,15 +1,19 @@
 package lugo
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"sync"
+
+	"github.com/xingshuo/lugo/common/utils"
 
 	"github.com/xingshuo/lugo/common/netframe"
 )
 
 type ClusterProxy struct {
 	rmtClusters map[string]string           // clustername: address
+	hashToNames map[uint32]string           // hashID : clustername
 	dialers     map[string]*netframe.Dialer // clustername: dialer
 	rwMu        sync.RWMutex
 }
@@ -28,6 +32,12 @@ func (p *ClusterProxy) Reload(clusterAddrs map[string]string) {
 		}
 	}
 	p.rmtClusters = clusterAddrs
+	// 重新生成hash表
+	hashs := make(map[uint32]string)
+	for name := range clusterAddrs {
+		hashs[utils.ClusterNameToHash(name)] = name
+	}
+	p.hashToNames = hashs
 }
 
 func (p *ClusterProxy) GetDialer(clusterName string) (*netframe.Dialer, error) {
@@ -64,7 +74,9 @@ func (p *ClusterProxy) Exit() {
 }
 
 type GateReceiver struct {
-	server *Server
+	server        *Server
+	reqHeadBuffer ClusterReqHead
+	rspHeadBuffer ClusterRspHead
 }
 
 func (r *GateReceiver) OnConnected(s netframe.Sender) error {
@@ -72,7 +84,50 @@ func (r *GateReceiver) OnConnected(s netframe.Sender) error {
 }
 
 func (r *GateReceiver) OnMessage(s netframe.Sender, b []byte) (int, error) {
-	return len(b), nil
+	n, data := NetUnpack(b)
+	if n == 0 { // 没解够长度
+		return n, nil
+	}
+	if len(data) == 0 { // 几乎不可能发生
+		return n, fmt.Errorf("data is nil")
+	}
+	msgType := MsgType(data[0])
+	// 剔除msgType
+	data = data[1:]
+	if msgType == PTYPE_CLUSTER_REQ {
+		head := &r.reqHeadBuffer
+		pos, err := head.Unpack(data)
+		if err != nil {
+			return n, err
+		}
+		dstSvc := r.server.GetServiceByHandle(SVC_HANDLE(head.destination))
+		if dstSvc == nil {
+			return n, fmt.Errorf("%s not find dst svc %d", msgType, head.destination)
+		}
+		dstSvc.pushMsg(SVC_HANDLE(head.source), PTYPE_CLUSTER_REQ, head.session, data[pos:])
+	} else if msgType == PTYPE_CLUSTER_RSP {
+		head := &r.rspHeadBuffer
+		pos, err := head.Unpack(data)
+		if err != nil {
+			return n, err
+		}
+		dstSvc := r.server.GetServiceByHandle(SVC_HANDLE(head.destination))
+		if dstSvc == nil {
+			return n, fmt.Errorf("%s not find dst svc %d", msgType, head.destination)
+		}
+		if head.errCode == ErrCode_OK {
+			rsp := &RpcResponse{
+				Reply: []interface{}{data[pos:]},
+			}
+			dstSvc.pushMsg(SVC_HANDLE(head.source), PTYPE_CLUSTER_RSP, head.session, rsp)
+		} else {
+			rsp := &RpcResponse{
+				Err: errors.New(string(data[pos:])),
+			}
+			dstSvc.pushMsg(SVC_HANDLE(head.source), PTYPE_CLUSTER_RSP, head.session, rsp)
+		}
+	}
+	return n, nil
 }
 
 func (r *GateReceiver) OnClosed(s netframe.Sender) error {
@@ -121,6 +176,15 @@ func (sc *Sidecar) Send(clusterName string, data []byte) error {
 		return err
 	}
 	return d.Send(data)
+}
+
+func (sc *Sidecar) GetClusterName(handle SVC_HANDLE) (string, bool) {
+	hashID := uint32(handle >> 32)
+	cluster, ok := sc.clusterProxy.hashToNames[hashID]
+	if !ok {
+		return "unknown", false
+	}
+	return cluster, true
 }
 
 func (sc *Sidecar) Exit() {

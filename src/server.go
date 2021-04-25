@@ -7,8 +7,9 @@ import (
 	"os"
 	"os/signal"
 	"sync"
-	"sync/atomic"
 	"syscall"
+
+	"github.com/xingshuo/lugo/common/utils"
 
 	"github.com/xingshuo/lugo/common/log"
 )
@@ -26,7 +27,6 @@ type Server struct {
 	nameServices   map[string]*Service
 	sidecar        *Sidecar
 	log            *log.LogSystem
-	handleSeq      uint64
 }
 
 func (s *Server) Init(config string) error {
@@ -43,20 +43,6 @@ func (s *Server) Init(config string) error {
 	}
 	s.log = log.NewStdLogSystem(log.LevelInfo)
 	return nil
-}
-
-func (s *Server) NewSvcHandle() SVC_HANDLE {
-	for {
-		handle := SVC_HANDLE(atomic.AddUint64(&s.handleSeq, 1))
-		if handle == 0 {
-			continue
-		}
-		if s.handleServices[handle] != nil {
-			continue
-		}
-		return handle
-	}
-	return 0
 }
 
 func (s *Server) ClusterName() string {
@@ -92,10 +78,7 @@ func (s *Server) NewService(svcName string) (*Service, error) {
 	if svc != nil {
 		return nil, fmt.Errorf("service re-create")
 	}
-	handle := s.NewSvcHandle()
-	if handle == 0 {
-		return nil, fmt.Errorf("invalid svc handle")
-	}
+	handle := SVC_HANDLE(utils.MakeServiceHandle(s.ClusterName(), svcName))
 	svc = &Service{
 		server: s,
 		name:   svcName,
