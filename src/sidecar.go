@@ -11,7 +11,59 @@ import (
 	"github.com/xingshuo/lugo/common/netframe"
 )
 
+type ClusterSender struct {
+	server        *Server
+	reqHeadBuffer ClusterReqHead
+	rspHeadBuffer ClusterRspHead
+}
+
+func (r *ClusterSender) OnConnected(s netframe.Sender) error {
+	return nil
+}
+
+func (r *ClusterSender) OnMessage(s netframe.Sender, b []byte) (int, error) {
+	n, data := NetUnpack(b)
+	if n == 0 { // 没解够长度
+		return n, nil
+	}
+	if len(data) == 0 { // 几乎不可能发生
+		return n, fmt.Errorf("data is nil")
+	}
+	msgType := MsgType(data[0])
+	// 剔除msgType
+	data = data[1:]
+	// 跟skynet通信, 会走dialer的reader连接回包
+	if msgType == PTYPE_CLUSTER_RSP {
+		head := &r.rspHeadBuffer
+		pos, err := head.Unpack(data)
+		if err != nil {
+			return n, err
+		}
+		dstSvc := r.server.GetServiceByHandle(SVC_HANDLE(head.destination))
+		if dstSvc == nil {
+			return n, fmt.Errorf("%s not find dst svc %d", msgType, head.destination)
+		}
+		if head.errCode == ErrCode_OK {
+			rsp := &RpcResponse{
+				Reply: []interface{}{data[pos:]},
+			}
+			dstSvc.pushMsg(SVC_HANDLE(head.source), PTYPE_CLUSTER_RSP, head.session, rsp)
+		} else {
+			rsp := &RpcResponse{
+				Err: errors.New(string(data[pos:])),
+			}
+			dstSvc.pushMsg(SVC_HANDLE(head.source), PTYPE_CLUSTER_RSP, head.session, rsp)
+		}
+	}
+	return n, nil
+}
+
+func (r *ClusterSender) OnClosed(s netframe.Sender) error {
+	return nil
+}
+
 type ClusterProxy struct {
+	server      *Server
 	rmtClusters map[string]string           // clustername: address
 	hashToNames map[uint32]string           // hashID : clustername
 	dialers     map[string]*netframe.Dialer // clustername: dialer
@@ -51,7 +103,9 @@ func (p *ClusterProxy) GetDialer(clusterName string) (*netframe.Dialer, error) {
 		p.dialers = make(map[string]*netframe.Dialer)
 	}
 	if p.dialers[clusterName] == nil {
-		d, err := netframe.NewDialer(addr, nil)
+		d, err := netframe.NewDialer(addr, func() netframe.Receiver {
+			return &ClusterSender{server: p.server}
+		})
 		if err != nil {
 			return nil, err
 		}
@@ -144,7 +198,7 @@ type Sidecar struct {
 func (sc *Sidecar) Init() error {
 	sc.clusterName = sc.server.config.ClusterName
 	// 从配置中读取clustername表
-	sc.clusterProxy = &ClusterProxy{}
+	sc.clusterProxy = &ClusterProxy{server: sc.server}
 	sc.clusterProxy.Reload(sc.server.config.RemoteAddrs)
 	// 绑定本地端口
 	l, err := netframe.NewListener(sc.server.config.LocalAddr, func() netframe.Receiver {

@@ -188,6 +188,12 @@ func (s *Service) RegisterTimer(onTick TimerFunc, interval int, count int) uint3
 }
 
 func (s *Service) onTimeout(seq uint32) {
+	defer func() {
+		s.suspend <- struct{}{}
+		/*		if e := recover(); e != nil {
+				s.log.Errorf("panic occurred on Timeout: %v", e)
+			}*/
+	}()
 	t := s.timers[seq]
 	if t != nil {
 		t.onTick()
@@ -208,7 +214,6 @@ func (s *Service) onTimeout(seq uint32) {
 	} else {
 		s.log.Errorf("unknown timer seq %d", seq)
 	}
-	s.suspend <- struct{}{}
 }
 
 func (s *Service) pushMsg(source SVC_HANDLE, msgType MsgType, session uint32, data ...interface{}) {
