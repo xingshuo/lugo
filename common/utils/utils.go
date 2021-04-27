@@ -14,11 +14,11 @@ func Assert(condition bool, errMsg string) {
 
 //handleID生成规则:Hash(clusterName)|Hash(service_name)
 func MakeServiceHandle(clusterName, serviceName string) uint64 {
-	h := fnv.New32a()
+	h := fnv.New32()
 	h.Write([]byte(serviceName))
 	lowHash := h.Sum32()
 
-	h = fnv.New32a()
+	h = fnv.New32()
 	h.Write([]byte(clusterName))
 	highHash := h.Sum32()
 
@@ -28,7 +28,7 @@ func MakeServiceHandle(clusterName, serviceName string) uint64 {
 }
 
 func ClusterNameToHash(clusterName string) uint32 {
-	h := fnv.New32a()
+	h := fnv.New32()
 	h.Write([]byte(clusterName))
 	return h.Sum32()
 }
