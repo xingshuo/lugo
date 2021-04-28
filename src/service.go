@@ -110,8 +110,9 @@ func (s *Service) Call(ctx context.Context, svcName string, args ...interface{})
 	// 通知Serve继续处理其他消息
 	s.suspend <- struct{}{}
 	timeout, _ := ctx.Value(CtxKeyRpcTimeout).(int)
+	var timer *time.Timer = nil
 	if timeout > 0 {
-		time.AfterFunc(time.Duration(timeout)*time.Millisecond*10, func() {
+		timer = time.AfterFunc(time.Duration(timeout)*time.Millisecond*10, func() {
 			s.pushMsg(0, PTYPE_RESPONSE, session, &RpcResponse{
 				Err: RPC_TIMEOUT_ERR,
 			})
@@ -119,6 +120,9 @@ func (s *Service) Call(ctx context.Context, svcName string, args ...interface{})
 	}
 	rsp := <-done
 	s.waitPool.put(done)
+	if timer != nil && rsp.Err != RPC_TIMEOUT_ERR {
+		timer.Stop()
+	}
 	return rsp.Reply, rsp.Err
 }
 
@@ -149,8 +153,9 @@ func (s *Service) CallCluster(ctx context.Context, clusterName, svcName string, 
 	// 通知Serve继续处理其他消息
 	s.suspend <- struct{}{}
 	timeout, _ := ctx.Value(CtxKeyRpcTimeout).(int)
+	var timer *time.Timer = nil
 	if timeout > 0 {
-		time.AfterFunc(time.Duration(timeout)*time.Millisecond*10, func() {
+		timer = time.AfterFunc(time.Duration(timeout)*time.Millisecond*10, func() {
 			s.pushMsg(0, PTYPE_RESPONSE, session, &RpcResponse{
 				Err: RPC_TIMEOUT_ERR,
 			})
@@ -158,6 +163,9 @@ func (s *Service) CallCluster(ctx context.Context, clusterName, svcName string, 
 	}
 	rsp := <-done
 	s.waitPool.put(done)
+	if timer != nil && rsp.Err != RPC_TIMEOUT_ERR {
+		timer.Stop()
+	}
 	return rsp.Reply, rsp.Err
 }
 
