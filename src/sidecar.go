@@ -43,6 +43,7 @@ func (r *ClusterSender) OnMessage(s netframe.Sender, b []byte) (int, error) {
 		if dstSvc == nil {
 			return n, fmt.Errorf("%s not find dst svc %d", msgType, head.destination)
 		}
+		r.server.GetLogSystem().Infof("Unpack head is %v", head)
 		if head.errCode == ErrCode_OK {
 			rsp := &RpcResponse{
 				Reply: []interface{}{data[pos:]},
