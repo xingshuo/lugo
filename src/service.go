@@ -295,7 +295,7 @@ func (s *Service) onClusterReq(source SVC_HANDLE, session uint32, msg ...interfa
 }
 
 func (s *Service) dispatchMsg(source SVC_HANDLE, msgType MsgType, session uint32, msg ...interface{}) {
-	s.log.Infof("dispatch msg is %v", msg)
+	s.log.Infof("dispatch %v msg is %v", msgType, msg)
 	switch msgType {
 	case PTYPE_TIMER:
 		go s.onTimeout(session)

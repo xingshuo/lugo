@@ -30,18 +30,19 @@ type Server struct {
 }
 
 func (s *Server) Init(config string) error {
+	s.log = log.NewStdLogSystem(log.LevelInfo)
 	s.handleServices = make(map[SVC_HANDLE]*Service)
 	s.nameServices = make(map[string]*Service)
 	err := s.loadConfig(config)
 	if err != nil {
 		return err
 	}
+	s.log.Infof("load config %s done", config)
 	s.sidecar = &Sidecar{server: s}
 	err = s.sidecar.Init()
 	if err != nil {
 		return err
 	}
-	s.log = log.NewStdLogSystem(log.LevelInfo)
 	return nil
 }
 
