@@ -231,6 +231,7 @@ func NetPackResponse(buffer []byte, source SVC_HANDLE, session uint32, destinati
 
 	if rpcErr == nil {
 		body := seri.SeriPack(reply...)
+		fmt.Printf("pack reply %v to %v", reply, body)
 		if pos+len(body) > len(buffer) {
 			return nil, PACK_BUFFER_SHORT_ERR
 		}
