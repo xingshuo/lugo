@@ -54,6 +54,8 @@ func (r *ClusterSender) OnMessage(s netframe.Sender, b []byte) (int, error) {
 			}
 			dstSvc.pushMsg(SVC_HANDLE(head.source), PTYPE_CLUSTER_RSP, head.session, rsp)
 		}
+	} else {
+		r.server.GetLogSystem().Errorf("recv unknown type %v msg %d", msgType, n)
 	}
 	return n, nil
 }
@@ -200,6 +202,7 @@ func (sc *Sidecar) Init() error {
 	// 从配置中读取clustername表
 	sc.clusterProxy = &ClusterProxy{server: sc.server}
 	sc.clusterProxy.Reload(sc.server.config.RemoteAddrs)
+	sc.server.GetLogSystem().Info("sidecar reload cluster config done")
 	// 绑定本地端口
 	l, err := netframe.NewListener(sc.server.config.LocalAddr, func() netframe.Receiver {
 		return &GateReceiver{server: sc.server}
@@ -208,6 +211,7 @@ func (sc *Sidecar) Init() error {
 		return err
 	}
 	sc.gateListener = l
+	sc.server.GetLogSystem().Infof("sidecar listen %s done", sc.server.config.LocalAddr)
 	go func() {
 		err := l.Serve()
 		if err != nil {
