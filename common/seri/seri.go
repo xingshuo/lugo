@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"runtime"
+	"unsafe"
 )
 
 // Tips:所有>=2字节的整形, 统一按照大端序序列化和反序列化
@@ -230,14 +231,36 @@ func (wb *writeBlock) packOne(v interface{}, depth int) {
 	switch data := v.(type) {
 	case nil:
 		wb.packNil()
+	// 自动转换所有整形 -> int64(这一坨暂时没找到优雅的解决方案...)
+	case int:
+		wb.packInteger(int64(data))
+	case uint:
+		wb.packInteger(int64(data))
+	case int8:
+		wb.packInteger(int64(data))
+	case uint8:
+		wb.packInteger(int64(data))
+	case int16:
+		wb.packInteger(int64(data))
+	case uint16:
+		wb.packInteger(int64(data))
+	case int32:
+		wb.packInteger(int64(data))
+	case uint32:
+		wb.packInteger(int64(data))
 	case int64:
 		wb.packInteger(data)
+	case uint64:
+		wb.packInteger(int64(data))
+
 	case float64:
 		wb.packReal(data)
 	case bool:
 		wb.packBoolean(data)
 	case string:
 		wb.packString(data)
+	case []byte:
+		wb.packString(*(*string)(unsafe.Pointer(&data)))
 	case *Table:
 		wb.packTable(data, depth+1)
 	default:
