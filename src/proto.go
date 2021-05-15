@@ -26,6 +26,8 @@ func (mt MsgType) String() string {
 		return "CLUSTER_REQ"
 	case PTYPE_CLUSTER_RSP:
 		return "CLUSTER_RSP"
+	case PTYPE_SPAWN:
+		return "SPAWN"
 	default:
 		return "unknown"
 	}
@@ -37,6 +39,7 @@ const (
 	PTYPE_RESPONSE    = 3
 	PTYPE_CLUSTER_REQ = 4
 	PTYPE_CLUSTER_RSP = 5
+	PTYPE_SPAWN       = 6
 )
 
 type Message struct {
@@ -231,7 +234,6 @@ func NetPackResponse(buffer []byte, source SVC_HANDLE, session uint32, destinati
 
 	if rpcErr == nil {
 		body := seri.SeriPack(reply...)
-		fmt.Printf("pack reply %v to %v", reply, body)
 		if pos+len(body) > len(buffer) {
 			return nil, PACK_BUFFER_SHORT_ERR
 		}

@@ -2,6 +2,7 @@ package lugo
 
 import (
 	"context"
+	"log"
 
 	"github.com/xingshuo/lugo/common/utils"
 )
@@ -12,7 +13,10 @@ func NewServer(config string) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	s.GetLogSystem().Infof("cluster %s start run on %s", s.ClusterName(), utils.GetIP())
+	s.GetLogSystem().Infof("cluster {%s} start on", s.ClusterName())
+	go func() {
+		log.Printf("local ip: %s", utils.GetIP())
+	}()
 	return s, nil
 }
 

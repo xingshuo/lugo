@@ -1,5 +1,5 @@
 {
-  "ClusterName": "simple",
+  "ClusterName": "single",
   "LocalAddr": "127.0.0.1:8903",
   "RemoteAddrs": {}
 }

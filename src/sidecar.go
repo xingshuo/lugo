@@ -203,7 +203,6 @@ func (sc *Sidecar) Init() error {
 	// 从配置中读取clustername表
 	sc.clusterProxy = &ClusterProxy{server: sc.server}
 	sc.clusterProxy.Reload(sc.server.config.RemoteAddrs)
-	sc.server.GetLogSystem().Info("sidecar reload cluster config done")
 	// 绑定本地端口
 	l, err := netframe.NewListener(sc.server.config.LocalAddr, func() netframe.Receiver {
 		return &GateReceiver{server: sc.server}

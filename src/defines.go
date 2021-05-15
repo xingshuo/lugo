@@ -22,3 +22,5 @@ type Timer struct {
 	count    int
 	interval int
 }
+
+type SpawnFunc func()

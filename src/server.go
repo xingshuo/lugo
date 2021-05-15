@@ -15,9 +15,10 @@ import (
 )
 
 type ServerConfig struct {
-	ClusterName string            // 当前节点名
-	LocalAddr   string            // 本进程/容器 mesh地址 ip:port
-	RemoteAddrs map[string]string // 远端节点地址表
+	ClusterName    string            // 当前节点名
+	LocalAddr      string            // 本进程/容器 mesh地址 ip:port
+	RemoteAddrs    map[string]string // 远端节点地址表
+	IsRecoverModel bool              // 是否recover panic
 }
 
 type Server struct {
@@ -37,7 +38,6 @@ func (s *Server) Init(config string) error {
 	if err != nil {
 		return err
 	}
-	s.log.Infof("load config %s done", config)
 	s.sidecar = &Sidecar{server: s}
 	err = s.sidecar.Init()
 	if err != nil {

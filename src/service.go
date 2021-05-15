@@ -169,6 +169,10 @@ func (s *Service) CallCluster(ctx context.Context, clusterName, svcName string, 
 	return rsp.Reply, rsp.Err
 }
 
+func (s *Service) Spawn(f SpawnFunc) {
+	s.pushMsg(0, PTYPE_SPAWN, 0, f)
+}
+
 // interval:执行间隔, 单位: 10毫秒 (和skynet保持一致)
 // 注意: interval == 0时, 定时消息立即回射, 且固定只执行一次. 典型应用场景: 服务初始化
 // count: 执行次数, > 0:有限次, == 0:无限次
@@ -198,9 +202,11 @@ func (s *Service) RegisterTimer(onTick TimerFunc, interval int, count int) uint3
 func (s *Service) onTimeout(seq uint32) {
 	defer func() {
 		s.suspend <- struct{}{}
-		/*		if e := recover(); e != nil {
+		if s.server.config.IsRecoverModel {
+			if e := recover(); e != nil {
 				s.log.Errorf("panic occurred on Timeout: %v", e)
-			}*/
+			}
+		}
 	}()
 	t := s.timers[seq]
 	if t != nil {
@@ -241,9 +247,11 @@ func (s *Service) RegisterDispatch(dispatch DispatchFunc) {
 func (s *Service) onRequest(source SVC_HANDLE, session uint32, msg ...interface{}) {
 	defer func() {
 		s.suspend <- struct{}{}
-		/*		if e := recover(); e != nil {
+		if s.server.config.IsRecoverModel {
+			if e := recover(); e != nil {
 				s.log.Errorf("panic occurred on recv svc req: %v", e)
-			}*/
+			}
+		}
 	}()
 	reply, err := s.dispatch(context.WithValue(s.ctx, CtxKeySource, source), msg...)
 	if session != 0 {
@@ -279,9 +287,11 @@ func (s *Service) onResponse(session uint32, rsp *RpcResponse) {
 func (s *Service) onClusterReq(source SVC_HANDLE, session uint32, msg ...interface{}) {
 	defer func() {
 		s.suspend <- struct{}{}
-		/*		if e := recover(); e != nil {
+		if s.server.config.IsRecoverModel {
+			if e := recover(); e != nil {
 				s.log.Errorf("panic occurred on recv svc req: %v", e)
-			}*/
+			}
+		}
 	}()
 	reply, rpcErr := s.dispatch(context.WithValue(s.ctx, CtxKeySource, source), msg...)
 	if session != 0 {
@@ -303,7 +313,7 @@ func (s *Service) onClusterReq(source SVC_HANDLE, session uint32, msg ...interfa
 }
 
 func (s *Service) dispatchMsg(source SVC_HANDLE, msgType MsgType, session uint32, msg ...interface{}) {
-	s.log.Infof("dispatch %v msg is %v", msgType, msg)
+	s.log.Debugf("dispatch %v msg is %v", msgType, msg)
 	switch msgType {
 	case PTYPE_TIMER:
 		go s.onTimeout(session)
@@ -350,6 +360,27 @@ func (s *Service) dispatchMsg(source SVC_HANDLE, msgType MsgType, session uint32
 			rsp.Reply = seri.SeriUnpack(reply)
 		}
 		go s.onResponse(session, rsp)
+	case PTYPE_SPAWN:
+		if len(msg) != 1 {
+			s.log.Errorf("spawn msg len err %v", msg)
+			return
+		}
+		f, ok := msg[0].(SpawnFunc)
+		if !ok {
+			s.log.Errorf("spawn msg type err %v", msg)
+			return
+		}
+		go func() {
+			defer func() {
+				s.suspend <- struct{}{}
+				if s.server.config.IsRecoverModel {
+					if e := recover(); e != nil {
+						s.log.Errorf("panic occurred on Spawn: %v", e)
+					}
+				}
+			}()
+			f()
+		}()
 	}
 
 	<-s.suspend
@@ -357,7 +388,7 @@ func (s *Service) dispatchMsg(source SVC_HANDLE, msgType MsgType, session uint32
 }
 
 func (s *Service) Serve() {
-	s.log.Infof("cluster %s new service %s", s.server.ClusterName(), s)
+	s.log.Infof("cluster {%s} new service %s", s.server.ClusterName(), s)
 	for {
 		select {
 		case <-s.msgNotify:

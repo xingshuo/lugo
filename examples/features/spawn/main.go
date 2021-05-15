@@ -21,12 +21,11 @@ func onReqLogin(ctx context.Context, args ...interface{}) ([]interface{}, error)
 		return nil, fmt.Errorf("proto error")
 	}
 	svc := lugo.GetSvcFromCtx(ctx)
-	session := int64(0)
-	svc.Send(ctx, "gate", "HeartBeat", session)
-	svc.RegisterTimer(func() {
-		session++
-		svc.Send(ctx, "gate", "HeartBeat", session)
-	}, 100, 3)
+	svc.Spawn(func() {
+		for session := 1; session <= 3; session++ {
+			svc.Send(ctx, "gate", "HeartBeat", session)
+		}
+	})
 	log.Printf("%s on req login %d", msg.Hashmap["Name"], msg.Hashmap["Gid"])
 	return []interface{}{200}, nil
 }
@@ -75,16 +74,18 @@ func main() {
 		f := gateMethods[cmd]
 		return f(ctx, args[1:]...)
 	})
-	rsp, err := gateSvc.Call(context.Background(), "lobby", "ReqLogin", &seri.Table{
-		Hashmap: map[interface{}]interface{}{
-			"Gid":  int64(101),
-			"Name": "lilei",
-		},
+	gateSvc.Spawn(func() {
+		rsp, err := gateSvc.Call(context.Background(), "lobby", "ReqLogin", &seri.Table{
+			Hashmap: map[interface{}]interface{}{
+				"Gid":  int64(101),
+				"Name": "lilei",
+			},
+		})
+		if err == nil {
+			log.Printf("rpc result: %d\n", rsp[0].(int))
+		} else {
+			log.Printf("rpc err: %v\n", err)
+		}
 	})
-	if err == nil {
-		log.Printf("rpc result: %d\n", rsp[0].(int))
-	} else {
-		log.Printf("rpc err: %v\n", err)
-	}
 	server.WaitExit(syscall.SIGINT)
 }
