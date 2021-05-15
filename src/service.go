@@ -169,8 +169,8 @@ func (s *Service) CallCluster(ctx context.Context, clusterName, svcName string, 
 	return rsp.Reply, rsp.Err
 }
 
-func (s *Service) Spawn(f SpawnFunc) {
-	s.pushMsg(0, PTYPE_SPAWN, 0, f)
+func (s *Service) Spawn(f SpawnFunc, args ...interface{}) {
+	s.pushMsg(0, PTYPE_SPAWN, 0, f, args)
 }
 
 // interval:执行间隔, 单位: 10毫秒 (和skynet保持一致)
@@ -210,7 +210,7 @@ func (s *Service) onTimeout(seq uint32) {
 	}()
 	t := s.timers[seq]
 	if t != nil {
-		t.onTick()
+		t.onTick(s.ctx)
 		if t.count > 0 { // 有限次执行
 			t.count--
 			if t.count == 0 {
@@ -361,13 +361,18 @@ func (s *Service) dispatchMsg(source SVC_HANDLE, msgType MsgType, session uint32
 		}
 		go s.onResponse(session, rsp)
 	case PTYPE_SPAWN:
-		if len(msg) != 1 {
+		if len(msg) != 2 {
 			s.log.Errorf("spawn msg len err %v", msg)
 			return
 		}
 		f, ok := msg[0].(SpawnFunc)
 		if !ok {
-			s.log.Errorf("spawn msg type err %v", msg)
+			s.log.Errorf("spawn msg[0] type err %v", msg)
+			return
+		}
+		args, ok := msg[1].([]interface{})
+		if !ok {
+			s.log.Errorf("spawn msg[1] type err %v", msg)
 			return
 		}
 		go func() {
@@ -379,7 +384,8 @@ func (s *Service) dispatchMsg(source SVC_HANDLE, msgType MsgType, session uint32
 					}
 				}
 			}()
-			f()
+
+			f(s.ctx, args...)
 		}()
 	}
 

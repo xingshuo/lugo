@@ -19,7 +19,7 @@ func onReqLogin(ctx context.Context, args ...interface{}) ([]interface{}, error)
 	svc := lugo.GetSvcFromCtx(ctx)
 	session := int64(0)
 	svc.SendCluster(ctx, "cluster_client", "gate", "HeartBeat", session, "abcde")
-	svc.RegisterTimer(func() {
+	svc.RegisterTimer(func(ctx context.Context) {
 		session++
 		svc.SendCluster(ctx, "cluster_client", "gate", "HeartBeat", session, fmt.Sprintf("bcdef%d", session))
 	}, 100, 3)

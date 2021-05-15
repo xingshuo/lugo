@@ -16,11 +16,11 @@ const (
 )
 
 type DispatchFunc func(ctx context.Context, args ...interface{}) ([]interface{}, error)
-type TimerFunc func()
+type TimerFunc func(ctx context.Context)
 type Timer struct {
 	onTick   TimerFunc
 	count    int
 	interval int
 }
 
-type SpawnFunc func()
+type SpawnFunc func(ctx context.Context, args ...interface{})

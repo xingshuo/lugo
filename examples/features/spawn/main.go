@@ -21,7 +21,7 @@ func onReqLogin(ctx context.Context, args ...interface{}) ([]interface{}, error)
 		return nil, fmt.Errorf("proto error")
 	}
 	svc := lugo.GetSvcFromCtx(ctx)
-	svc.Spawn(func() {
+	svc.Spawn(func(ctx context.Context, args ...interface{}) {
 		for session := 1; session <= 3; session++ {
 			svc.Send(ctx, "gate", "HeartBeat", session)
 		}
@@ -74,7 +74,8 @@ func main() {
 		f := gateMethods[cmd]
 		return f(ctx, args[1:]...)
 	})
-	gateSvc.Spawn(func() {
+	gateSvc.Spawn(func(ctx context.Context, args ...interface{}) {
+		log.Printf("spawn args name:%s no:%d\n", args[0].(string), args[1].(int))
 		rsp, err := gateSvc.Call(context.Background(), "lobby", "ReqLogin", &seri.Table{
 			Hashmap: map[interface{}]interface{}{
 				"Gid":  int64(101),
@@ -86,6 +87,6 @@ func main() {
 		} else {
 			log.Printf("rpc err: %v\n", err)
 		}
-	})
+	}, "lakefu", 5043)
 	server.WaitExit(syscall.SIGINT)
 }
