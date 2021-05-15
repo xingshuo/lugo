@@ -8,6 +8,11 @@ import (
 	"strings"
 )
 
+func init() {
+	// http请求会阻塞, 所以提前获取
+	go GetIP()
+}
+
 var defaultIP string = "0.0.0.0"
 
 func GetInternalIP() string { //本机内网ip,取第一个
